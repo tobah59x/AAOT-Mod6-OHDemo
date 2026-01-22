@@ -1,0 +1,12 @@
+[
+  "Uh, I think Alice has an appointment… for Jan 25? Can you check?",
+  "Cancel Bob… wait, I’m not sure if it’s the 30th or the 31st, do it anyway?",
+  "Reschedule Carol… no, not that day… maybe Feb… oh forget it, just tell me what’s available",
+  "Hi, I want to book John next week, not sure which day, and also cancel someone else",
+  "Eve's appointment… keep it? Or maybe move it? I forgot the original time",
+  "Alce appmnt 25 Jan pls confirm",
+  "Bob cancel appointment maybe? Can you handle it?",
+  "Carol, reschedule… oh wait, can you check if she’s free Feb 2 or Feb 3?",
+  "I need to change multiple appointments, don’t know all the details",
+  "Hello? Can you just do all my stuff? Alice, Bob, Carol… and notify them?"
+]

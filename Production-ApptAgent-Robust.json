@@ -1,0 +1,198 @@
+{
+  "name": "Production - Appointment Agent - Robust",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an appointment command parser.\n\nFrom the input, extract a single JSON object with this exact schema:\n\n{\n  \"intent\": \"confirm | cancel | reschedule\",\n  \"person\": string,\n  \"date\": \"YYYY-MM-DD\"\n}\n\nRules:\n- Do NOT invent missing information.\n- If any field cannot be confidently extracted, set it to null.\n- Output ONLY valid JSON.\n- No explanations, no extra text.\n\nInput:\n{{ $json[\"request\"] }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        480,
+        -352
+      ],
+      "id": "df6ebea9-f5f7-4c2a-9e31-fed565b65eb1",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Take the array of requests from the input\nconst requests = $json[\"requests\"] || [];\n\n// Return each request as a separate item\nreturn requests.map(req => ({\n  json: { request: req }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -352
+      ],
+      "id": "f96beaa1-93b1-4164-b62c-565e46f4b1bb",
+      "name": "Split Requests into Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  let parsed = null;\n  let valid = true;\n  let reason = null;\n\n  try {\n    parsed = JSON.parse(item.json.text);\n  } catch (e) {\n    valid = false;\n    reason = 'Invalid JSON';\n  }\n\n  return {\n    json: {\n      valid,\n      reason,\n      parsed\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -352
+      ],
+      "id": "91a434c5-6a57-4520-a12e-e5db04af85cc",
+      "name": "Parse JSON"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c9e0116b-cd17-4863-8548-c8c2355ee959",
+              "name": "requests",
+              "value": "[   \"Uh, I think Alice has an appointment… for Jan 25? Can you check?\",   \"Cancel Bob… wait, I’m not sure if it’s the 30th or the 31st, do it anyway?\",   \"Reschedule Carol… no, not that day… maybe Feb… oh forget it, just tell me what’s available\",   \"Hi, I want to book John next week, not sure which day, and also cancel someone else\",   \"Eve's appointment… keep it? Or maybe move it? I forgot the original time\",   \"Alce appmnt 25 Jan pls confirm\",   \"Bob cancel appointment maybe? Can you handle it?\",   \"Carol, reschedule… oh wait, can you check if she’s free Feb 2 or Feb 3?\",   \"I need to change multiple appointments, don’t know all the details\",   \"Hello? Can you just do all my stuff? Alice, Bob, Carol… and notify them?\" ]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        32,
+        -352
+      ],
+      "id": "c015e1cd-87bc-4352-9a7f-81d8498394d8",
+      "name": "Input (Multi-Request)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -352
+      ],
+      "id": "9369a4c2-7c35-41c3-910b-2013828b3f2e",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -128
+      ],
+      "id": "e60988d4-eb44-4451-a12f-bc5dc5070ccf",
+      "name": "LLM (Ollama Chat)",
+      "credentials": {
+        "ollamaApi": {
+          "id": "56akoMhS7sppHvaL",
+          "name": "Local Ollama"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const total = items.length;\n\nlet completed = 0;\nlet escalations = 0;\nlet satisfactionSum = 0;\n\nfor (const item of items) {\n  const parsed = item.json.parsed;\n\n  const taskCompleted =\n    parsed &&\n    parsed.intent &&\n    parsed.person &&\n    parsed.intent !== 'unknown';\n\n  if (taskCompleted) completed++;\n  else escalations++;\n\n  satisfactionSum += taskCompleted ? 5 : 2;\n}\n\nreturn [{\n  json: {\n    total_requests: total,\n    tasks_completed: completed,\n    escalations,\n    success_rate: completed / total,\n    avg_user_satisfaction: satisfactionSum / total\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -352
+      ],
+      "id": "74df74e8-c61f-463f-8abb-d8613cd1b3df",
+      "name": "KPI Measurement"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Requests into Items": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "KPI Measurement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input (Multi-Request)": {
+      "main": [
+        [
+          {
+            "node": "Split Requests into Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input (Multi-Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM (Ollama Chat)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KPI Measurement": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "1b2f93d0-a992-4653-9b8b-b8e93a5b4dc8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "43090fb6b29eb5f109fc413baabd10432834c6ab3470ad21e88a5ec1ec74566d"
+  },
+  "id": "Wkv3FXIZVQbO0mJV",
+  "tags": []
+}

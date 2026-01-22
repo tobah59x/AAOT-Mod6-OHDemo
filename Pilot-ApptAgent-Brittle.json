@@ -1,0 +1,199 @@
+{
+  "name": "Pilot - Appointment Agent - Brittle",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an appointment assistant.\n\nYou MUST return valid JSON only.\nNo prose. No explanation.\n\nSchema:\n{\n  \"intent\": \"confirm | cancel | reschedule\",\n  \"person\": \"<name>\",\n  \"date\": \"<YYYY-MM-DD>\"\n}\n\nIf the request is unclear, incomplete, or ambiguous,\nRETURN INVALID JSON (for example: plain text, partial JSON, or malformed JSON).\n\nRequest:\n{{$json[\"request\"]}}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        480,
+        -352
+      ],
+      "id": "af5d0d79-b7a2-4cb4-ba98-0ff95c2e6782",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Take the array of requests from the input\nconst requests = $json[\"requests\"] || [];\n\n// Return each request as a separate item\nreturn requests.map(req => ({\n  json: { request: req }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -352
+      ],
+      "id": "338c9be6-3daa-4b86-ae2e-06ccbd4be150",
+      "name": "Split Requests into Items"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.text;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (e) {\n  return {\n    valid: false,\n    reason: 'Invalid JSON',\n    parsed: null\n  };\n}\n\nconst allowedIntents = ['confirm', 'cancel', 'reschedule'];\n\nif (!allowedIntents.includes(parsed.intent)) {\n  return {\n    valid: false,\n    reason: 'Invalid intent',\n    parsed\n  };\n}\n\nif (typeof parsed.person !== 'string' || parsed.person.length < 2) {\n  return {\n    valid: false,\n    reason: 'Invalid person',\n    parsed\n  };\n}\n\nif (parsed.date === null || parsed.date === 'null') {\n  return {\n    valid: false,\n    reason: 'Missing date',\n    parsed\n  };\n}\n\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(parsed.date)) {\n  return {\n    valid: false,\n    reason: 'Invalid date format',\n    parsed\n  };\n}\n\nreturn {\n  valid: true,\n  reason: null,\n  parsed\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -352
+      ],
+      "id": "63dac60c-84c1-4a0b-aa93-7b9999c3dc7a",
+      "name": "Parse JSON"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -128
+      ],
+      "id": "66f56a78-ed2f-442c-b793-aa064e8e89ec",
+      "name": "LLM (Ollama Chat)",
+      "credentials": {
+        "ollamaApi": {
+          "id": "56akoMhS7sppHvaL",
+          "name": "Local Ollama"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -352
+      ],
+      "id": "fb48cd66-cdb7-4f8c-b345-da923aa34630",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c9e0116b-cd17-4863-8548-c8c2355ee959",
+              "name": "requests",
+              "value": "[   \"Uh, I think Alice has an appointment… for Jan 25? Can you check?\",   \"Cancel Bob… wait, I’m not sure if it’s the 30th or the 31st, do it anyway?\",   \"Reschedule Carol… no, not that day… maybe Feb… oh forget it, just tell me what’s available\",   \"Hi, I want to book John next week, not sure which day, and also cancel someone else\",   \"Eve's appointment… keep it? Or maybe move it? I forgot the original time\",   \"Alce appmnt 25 Jan pls confirm\",   \"Bob cancel appointment maybe? Can you handle it?\",   \"Carol, reschedule… oh wait, can you check if she’s free Feb 2 or Feb 3?\",   \"I need to change multiple appointments, don’t know all the details\",   \"Hello? Can you just do all my stuff? Alice, Bob, Carol… and notify them?\" ]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        32,
+        -352
+      ],
+      "id": "bc65ced3-6a3b-4768-b2f3-f4add37f208b",
+      "name": "Input (Multi-Request)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst total = items.length;\nlet completed = 0;\nlet escalations = 0;\nlet satisfactionSum = 0;\n\nfor (const item of items) {\n  if (item.json.valid) {\n    completed++;\n    satisfactionSum += 5;\n  } else {\n    escalations++;\n    satisfactionSum += 1;\n  }\n}\n\nreturn {\n  total_requests: total,\n  tasks_completed: completed,\n  escalations,\n  success_rate: completed / total,\n  avg_user_satisfaction: satisfactionSum / total\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -352
+      ],
+      "id": "51f49739-0700-4797-8528-f5af34dac5eb",
+      "name": "KPI Measurement"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Requests into Items": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "KPI Measurement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM (Ollama Chat)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input (Multi-Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input (Multi-Request)": {
+      "main": [
+        [
+          {
+            "node": "Split Requests into Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KPI Measurement": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "46587f07-d8a4-4a3d-92db-9abb45fd2b44",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "43090fb6b29eb5f109fc413baabd10432834c6ab3470ad21e88a5ec1ec74566d"
+  },
+  "id": "RMq8HcxVt0n7EB72",
+  "tags": []
+}
